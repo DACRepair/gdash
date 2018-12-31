@@ -9,7 +9,6 @@
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import ConfigParser
 from flask import Flask, render_template, Response
-from flask_cache import Cache
 import json
 import os
 import sys
@@ -28,8 +27,6 @@ GlusterFS cli for `volume info` and `volume status` commands
 app = Flask(__name__, template_folder="dist", static_folder="dist/assets")
 app.debug = False
 args = None
-app.config['CACHE_TYPE'] = 'simple'
-app.cache = Cache(app)
 config = ConfigParser.RawConfigParser()
 
 
@@ -72,24 +69,18 @@ def volumesVolume(volid):
 
 @app.route("/data")
 def get_data():
-    cached = app.cache.get('data')
-    if cached:
-        result = cached
+    if args.host:
+        clusters = {"default": [args.host.strip()]}
+    elif args.clusters:
+        config.read(args.clusters)
+        clusters = {}
+        for name, value in config.items("clusters"):
+            if args.limit_cluster is None or args.limit_cluster == name:
+                clusters[name] = [x.strip() for x in value.split(",")]
     else:
-        if args.host:
-            clusters = {"default": [args.host.strip()]}
-        elif args.clusters:
-            config.read(args.clusters)
-            clusters = {}
-            for name, value in config.items("clusters"):
-                if args.limit_cluster is None or args.limit_cluster == name:
-                    clusters[name] = [x.strip() for x in value.split(",")]
-        else:
-            clusters = {"default": ["localhost"]}
+        clusters = {"default": ["localhost"]}
 
-        result = json.dumps(parse(clusters, args))
-        app.cache.set('data', result, timeout=args.cache)
-
+    result = json.dumps(parse(clusters, args))
     return Response(result, content_type='application/json; charset=utf-8')
 
 
